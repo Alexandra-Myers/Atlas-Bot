@@ -11,7 +11,7 @@ import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 
 public class ExcludeFromBansCommand extends BaseSlashCommand {
     public ExcludeFromBansCommand() {
-        super("exclude_from_bot_trap", "Excludes users|roles|role_groups from spam bot traps.", DefaultMemberPermissions.enabledFor(Permission.ADMINISTRATOR),
+        super("exclude-from-bot-trap", "Excludes users|roles|role_groups from spam bot traps.", DefaultMemberPermissions.enabledFor(Permission.ADMINISTRATOR),
                 new OptionData(OptionType.USER, "user", "A user to exclude.")
                         .setRequired(false),
                 new OptionData(OptionType.ROLE, "role", "A role to exclude.")

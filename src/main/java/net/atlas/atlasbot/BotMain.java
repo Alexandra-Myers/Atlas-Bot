@@ -54,7 +54,7 @@ public class BotMain {
         // Disable compression (not recommended)
         builder.setCompression(Compression.NONE);
         // Set activity (like "playing Something")
-        builder.setActivity(Activity.playing("Role Groups"));
+        builder.setActivity(Activity.playing("Trapping bots!"));
         configureMemoryUsage(builder);
         EnumSet<GatewayIntent> intents = EnumSet.of(
                 // Enables MessageReceivedEvent for guild (also known as servers)
