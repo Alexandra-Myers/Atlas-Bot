@@ -2,6 +2,7 @@ package net.atlas.atlasbot;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import net.atlas.atlasbot.command.*;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.entities.Activity;
@@ -12,14 +13,39 @@ import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import net.dv8tion.jda.api.utils.cache.CacheFlag;
 
 import javax.security.auth.login.LoginException;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.EnumSet;
-import java.util.List;
 
 public class BotMain {
+    public static Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    public static JDA JDA;
+    public static File CONFIG_FILE;
+    public static BotConfiguration CONFIGURATION;
     public static ArrayList stringOfChannels = new ArrayList<String>();
     public static void main(String[] args) throws LoginException, InterruptedException {
-        JDABuilder builder = JDABuilder.createDefault("Your token here");
+        String userHome = System.getProperty("user.home");
+        CONFIG_FILE = new File(userHome, "atlas_bot/bot.json");
+        try {
+            if (!CONFIG_FILE.exists()) {
+                Files.createDirectories(Path.of(userHome + "/atlas_bot"));
+                CONFIG_FILE.createNewFile();
+                PrintWriter writer = new PrintWriter(CONFIG_FILE);
+                GSON.toJson(new BotConfiguration(), writer);
+                writer.close();
+            }
+            BufferedReader reader = new BufferedReader(new FileReader(CONFIG_FILE));
+            CONFIGURATION = GSON.fromJson(reader, BotConfiguration.class);
+        } catch (FileNotFoundException e) {
+            System.out.println("Failed to read config file: " + e);
+            return;
+        } catch (IOException e) {
+            System.out.println("Failed to create config file: " + e);
+            return;
+        }
+        JDABuilder builder = JDABuilder.createDefault(CONFIGURATION.token);
 
         // Disable parts of the cache
         builder.disableCache(CacheFlag.MEMBER_OVERRIDES, CacheFlag.VOICE_STATE);
@@ -44,9 +70,14 @@ public class BotMain {
         );
         builder.enableIntents(intents);
 
-        JDA jda = builder.build();
-        jda.awaitReady();
-        jda.addEventListener(new ReadyListener());
+        JDA = builder.build();
+        JDA.awaitReady();
+        JDA.addEventListener(new ReadyListener());
+        new AddRoleGroupCommand();
+        new AddRoleToGroupCommand();
+        new ExcludeFromBansCommand();
+        new TrapChannelCommand();
+        BaseSlashCommand.register();
         for (int i = 0; i <= 201; i++) {
             if(i == 200) {
                 i = 0;

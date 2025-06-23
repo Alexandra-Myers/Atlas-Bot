@@ -1,32 +1,37 @@
 package net.atlas.atlasbot;
 
+import net.atlas.atlasbot.command.BaseSlashCommand;
 import net.dv8tion.jda.api.EmbedBuilder;
-import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.*;
 import net.dv8tion.jda.api.entities.channel.unions.GuildMessageChannelUnion;
 import net.dv8tion.jda.api.entities.channel.unions.MessageChannelUnion;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
-import net.dv8tion.jda.api.events.GenericEvent;
-import net.dv8tion.jda.api.events.ReadyEvent;
+import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
-import net.dv8tion.jda.api.events.message.react.MessageReactionAddEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.managers.ThreadManager;
-import net.dv8tion.jda.api.requests.restaction.MessageCreateAction;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.interactions.components.buttons.ButtonStyle;
+import net.dv8tion.jda.api.utils.TimeUtil;
+import org.jetbrains.annotations.NotNull;
 
 import javax.annotation.Nonnull;
-import javax.security.auth.login.LoginException;
 import java.awt.*;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.EventListener;
 import java.util.concurrent.ExecutionException;
 
 public class ReadyListener extends ListenerAdapter {
-    public static ArrayList<RoleGroup> roleGroups = new ArrayList();
     public static final Emoji HEART = Emoji.fromUnicode("U+2764");
+    @Override
+    public void onSlashCommandInteraction(@NotNull SlashCommandInteractionEvent event) {
+        if (BaseSlashCommand.slashCommands.isEmpty()) return;
+        String command = event.getName();
+
+        for (BaseSlashCommand slashCommand : BaseSlashCommand.slashCommands) {
+            if (slashCommand.name.equalsIgnoreCase(command))  {
+                slashCommand.commandTriggered(event);
+                return;
+            }
+        }
+    }
     // This overrides the method called onMessageReceived in the ListenerAdapter class
     // Your IDE (such as intellij or eclipse) can automatically generate this override for you, by simply typing "onMessage" and auto-completing it!
     @Override
@@ -38,62 +43,13 @@ public class ReadyListener extends ListenerAdapter {
         // The actual message sent by the user, this can also be a message the bot sent itself, since you *do* receive your own messages after all
         Message message = event.getMessage();
         String content = message.getContentRaw();
-        if(message.getMember().hasPermission(Permission.ADMINISTRATOR) && author.isBot() && (content.startsWith("A!addRoleToGroup") || content.startsWith("A!addGroupRole"))) {
-            int i = content.indexOf(",");
-            String startArgs = content.substring(i + 1);
-            int secondIndex = startArgs.indexOf(",");
-            String roleToAdd = startArgs.substring(0, secondIndex - 1);
-            String groupName = roleToAdd.substring(secondIndex + 1);
-            for(RoleGroup group : roleGroups) {
-                if(group.getName().equals(groupName)) {
-                    for(Role role : event.getGuild().getRoles()) {
-                        if(role.getName().equals(roleToAdd)) {
-                            group.rolesInGroup.add(role);
-                        }
-                    }
-                }
+        if (BotMain.CONFIGURATION.trappedChannels.get(event.getGuild().getIdLong()).contains(channel.getIdLong())) {
+            if (!(author.isBot() || isExcludedFromBan(event.getGuild().getIdLong(), event.getMember()))) {
+                event.getGuild().ban(author, 1).queue();
+                event.getGuild().unban(author).queue();
             }
         }
-        if(message.getMember().hasPermission(Permission.ADMINISTRATOR) && author.isBot() && (content.startsWith("A!linkRoles") || content.startsWith("A!createGroup"))) {
-            int i = content.indexOf(",");
-            String startArgs = content.substring(i + 1);
-            int secondIndex = startArgs.indexOf(",");
-            String secondArgs = startArgs.substring(secondIndex + 1);
-            int thirdIndex = secondArgs.indexOf(",");
-            String firstRole = startArgs.substring(0, secondIndex - 1);
-            String secondRole = startArgs.substring(secondIndex + 1, thirdIndex - 1);
-            String groupName = secondRole.substring(thirdIndex + 1);
-            boolean groupExists = false;
-            Role groupRole = null;
-            for(RoleGroup group : roleGroups) {
-                if(group.getName().equals(groupName)) {
-                    try {
-                        channel
-                                .sendMessage("Cannot link roles into an already existing group!")
-                                .submit()
-                                .get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        throw new RuntimeException(e);
-                    }
-                    return;
-                }
-            }
-            for(Role role : event.getGuild().getRoles()) {
-                if(role.getName().equals(firstRole) || role.getName().equals(secondRole)) {
-                    if(!groupExists) {
-                        try {
-                            groupRole = event.getGuild().createRole().setName(groupName).setColor(role.getColor()).setMentionable(role.isMentionable()).setHoisted(role.isHoisted()).submit().get();
-                            groupExists = true;
-                        } catch (InterruptedException | ExecutionException e) {
-                            throw new RuntimeException(e);
-                        }
-                    }
-                    RoleGroup roleGroup = new RoleGroup(groupRole.getIdLong(), role.getGuild());
-                    roleGroup.rolesInGroup.add(role);
-                }
-            }
-        }
-        if(!author.isBot()) {
+        if (!author.isBot()) {
             boolean bl = false;
             if(content.startsWith("#AThreadListenToggle") || content.startsWith("#Atlt")) {
                 bl = !bl;
@@ -105,7 +61,8 @@ public class ReadyListener extends ListenerAdapter {
                                 .getParentMessageChannel();
                 try {
                     parentChannel
-                            .sendMessageEmbeds(new EmbedBuilder().addField("Thread: " + channel.getName(), author.getName() + ": " + message.getContentDisplay(), true).setColor(Color.MAGENTA).build())
+                            .sendMessageEmbeds(new EmbedBuilder().setAuthor(author.getName(), null, author.getAvatarUrl()).addField("Thread: " + channel.getAsMention(), message.getContentDisplay().split("#Atlt\s?", 2)[1] + " - " + author.getAsMention() + ", " + message.getTimeCreated().getYear(), true).setColor(Color.MAGENTA).build())
+                            .addActionRow(Button.of(ButtonStyle.LINK, message.getJumpUrl(), "Original Message"))
                             .submit()
                             .get()
                             .addReaction(HEART)
@@ -117,7 +74,7 @@ public class ReadyListener extends ListenerAdapter {
             if(content.startsWith("A!")) {
                 int i = content.indexOf("!");
                 String string = content.substring(i + 1);
-                if(string.matches("getGithub")) {
+                if (string.matches("getGithub")) {
                     try {
                         channel
                                 .sendMessage("https://github.com/Alexandra-Myers?tab=repositories")
@@ -126,7 +83,7 @@ public class ReadyListener extends ListenerAdapter {
                     } catch (InterruptedException | ExecutionException e) {
                         throw new RuntimeException(e);
                     }
-                }else if(string.matches("help")) {
+                } else if (string.matches("help")) {
                     try {
                         channel
                                 .sendMessageEmbeds(new EmbedBuilder()
@@ -144,5 +101,14 @@ public class ReadyListener extends ListenerAdapter {
                 }
             }
         }
+    }
+
+    private boolean isExcludedFromBan(long guildId, Member author) {
+        if (BotMain.CONFIGURATION.excludedFromTraps.get(guildId).stream().anyMatch(exclusionTarget -> switch (exclusionTarget.type) {
+            case USER -> author.getId().equals(exclusionTarget.id);
+            case ROLE -> author.getRoles().stream().anyMatch(role -> role.getId().equals(exclusionTarget.id));
+            case ROLE_GROUP -> author.getRoles().stream().anyMatch(role -> BotMain.CONFIGURATION.roleGroups.values().stream().anyMatch(ids -> ids.contains(role.getIdLong())));
+        })) return true;
+        return false;
     }
 }
