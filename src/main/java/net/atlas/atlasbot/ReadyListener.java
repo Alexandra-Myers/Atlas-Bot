@@ -43,7 +43,7 @@ public class ReadyListener extends ListenerAdapter {
         // The actual message sent by the user, this can also be a message the bot sent itself, since you *do* receive your own messages after all
         Message message = event.getMessage();
         String content = message.getContentRaw();
-        if (BotMain.CONFIGURATION.trappedChannels.get(event.getGuild().getIdLong()).contains(channel.getIdLong())) {
+        if (BotMain.CONFIGURATION.trappedChannels.containsKey(event.getGuild().getIdLong()) && BotMain.CONFIGURATION.trappedChannels.get(event.getGuild().getIdLong()).contains(channel.getIdLong())) {
             if (!(author.isBot() || isExcludedFromBan(event.getGuild().getIdLong(), event.getMember()))) {
                 event.getGuild().ban(author, 1).queue();
                 event.getGuild().unban(author).queue();
